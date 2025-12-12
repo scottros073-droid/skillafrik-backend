@@ -1,0 +1,33 @@
+sequenceDiagram
+  participant C as Client (browser/app)
+  participant F as Frontend
+  participant B as Backend (SkillAfrik)
+  participant PS as Paystack
+  participant DB as Database
+  participant W as Worker
+
+  C->>F: Click "Pay for job" (jobId, amount)
+  F->>B: POST /api/payments/create {jobId, purpose: job_escrow, amount}
+  B->>PS: Initialize transaction (amount, metadata)
+  PS-->>B: auth_url + reference
+  B->>DB: create Payment (status=PENDING, gatewayRef)
+  B-->>F: {checkoutUrl}
+  F-->>C: redirect to Paystack checkout
+  C->>PS: completes payment (card)
+  PS->>B: webhook POST /api/payments/webhook (charge.success)
+  B->>B: verify signature, find payment by reference
+  B->>DB: set Payment.status = PAID, set job.escrow = HELD
+  B->>DB: create Transaction (IN: escrow)
+  C->>F: sees "Payment confirmed"
+  W->>B: POST /api/jobs/:id/deliver (files)
+  B->>DB: set job.status = DELIVERED, deliveredAt
+  C->>B: POST /api/jobs/:id/approve
+  B->>DB: read job.escrow.amount
+  B->>B: compute fee = amount * platformFeePct
+  B->>DB: credit worker.wallet.available += (amount - fee)
+  B->>DB: create Transaction (FEE) and Transaction (OUT)
+  B->>DB: set job.escrow.status = RELEASED, job.status = COMPLETED
+  W->>B: POST /api/withdrawals {amount}
+  B->>PS: transfer from balance to recipientId
+  PS-->>B: transfer success/fail
+  B->>DB: update withdrawal status, update user.wallet accordingly

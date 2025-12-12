@@ -1,0 +1,10 @@
+app.post("/chats/:chatId/messages", async (req, res) => {
+  const { chatId } = req.params;
+  const { sender, text } = req.body;
+  const chat = await Chat.findById(chatId);
+  if (!chat) return res.status(404).json({ message: "Chat not found" });
+
+  chat.messages.push({ sender, text });
+  await chat.save();
+  res.json({ message: "Message sent", chat });
+});

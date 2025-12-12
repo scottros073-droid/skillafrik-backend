@@ -1,0 +1,5 @@
+// Already have this route
+app.get("/jobs", async (req, res) => {
+  const jobs = await Job.find().sort({ date: -1 });
+  res.json(jobs);
+});

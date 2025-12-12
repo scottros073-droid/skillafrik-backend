@@ -1,0 +1,10 @@
+// Get jobs created by this worker
+app.get("/my-jobs/:userId", async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const jobs = await Job.find({ createdBy: userId }).sort({ date: -1 });
+    res.json(jobs);
+  } catch (err) {
+    res.json({ message: "Error fetching jobs", error: err.message });
+  }
+});

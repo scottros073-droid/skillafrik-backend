@@ -1,0 +1,19 @@
+// Send a message
+app.post("/messages", async (req, res) => {
+  const { from, to, content } = req.body;
+  const message = new Message({ from, to, content });
+  await message.save();
+  res.json({ message: "Message sent", data: message });
+});
+
+// Get messages between 2 users
+app.get("/messages/:user1/:user2", async (req, res) => {
+  const { user1, user2 } = req.params;
+  const messages = await Message.find({
+    $or: [
+      { from: user1, to: user2 },
+      { from: user2, to: user1 },
+    ],
+  }).sort({ date: 1 });
+  res.json(messages);
+});

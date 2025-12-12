@@ -1,0 +1,24 @@
+app.get("/verify-payment/:reference", async (req, res) => {
+  const { reference } = req.params;
+
+  try {
+    const response = await axios.get(`https://api.paystack.co/transaction/verify/${reference}`, {
+      headers: { Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}` }
+    });
+
+    const { status, metadata } = response.data.data;
+    if (status === "success") {
+      // update user profile or job in DB
+      // Example: mark user as 'premium'
+      const user = await User.findById(metadata.userId);
+      user.isPremium = true;
+      await user.save();
+
+      res.json({ message: "Payment successful", user });
+    } else {
+      res.json({ message: "Payment not completed" });
+    }
+  } catch (err) {
+    res.status(500).json({ message: "Payment verification failed", error: err.message });
+  }
+});

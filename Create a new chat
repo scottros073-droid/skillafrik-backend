@@ -1,0 +1,6 @@
+app.post("/chats", async (req, res) => {
+  const { participants } = req.body; // array of user IDs
+  const chat = new Chat({ participants });
+  await chat.save();
+  res.json({ message: "Chat created", chat });
+});

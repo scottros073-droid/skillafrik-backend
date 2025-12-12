@@ -1,0 +1,16 @@
+// Client hires worker for a job
+app.post("/hire", async (req, res) => {
+  const { jobId, clientId, workerId } = req.body;
+  const hire = new Hire({ jobId, clientId, workerId });
+  await hire.save();
+  res.json({ message: "Worker hired successfully", hire });
+});
+
+// Get hires for a user (worker or client)
+app.get("/hires/:userId", async (req, res) => {
+  const { userId } = req.params;
+  const hires = await Hire.find({
+    $or: [{ clientId: userId }, { workerId: userId }],
+  }).sort({ date: -1 });
+  res.json(hires);
+});

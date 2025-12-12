@@ -1,0 +1,13 @@
+// Initiate payment
+app.post("/payment", async (req, res) => {
+  const { userId, amount, purpose } = req.body;
+
+  try {
+    const payment = new Payment({ userId, amount, purpose });
+    await payment.save();
+    // Normally here you'd integrate with Paystack/Flutterwave API
+    res.json({ message: "Payment recorded successfully", payment });
+  } catch (err) {
+    res.json({ message: "Payment failed", error: err.message });
+  }
+});
