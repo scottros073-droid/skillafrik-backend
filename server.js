@@ -3,12 +3,12 @@
 // -----------------------------
 // Imports
 // -----------------------------
+require("dotenv").config();
 const express = require("express");
 const http = require("http");
 const cors = require("cors");
 const mongoose = require("mongoose");
 const { Server } = require("socket.io");
-require("dotenv").config();
 
 // -----------------------------
 // App & Middleware
@@ -24,25 +24,29 @@ app.use(express.json());
 // -----------------------------
 const requireAuth = require("./middleware/authMiddleware");
 
-// Use try-catch to safely require routes in case files are missing
+// ✅ AUTH ROUTES (VERY IMPORTANT)
+const authRoutes = require("./routes/authRoutes");
+app.use("/api/auth", authRoutes);
+
+// Optional routes (safe loading)
 let chatRoutes, messageRoutes, paymentRoutes;
 
 try {
   chatRoutes = require("./routes/chatRoutes");
-} catch (err) {
-  console.warn("⚠️ chatRoutes not found. Make sure './routes/chatRoutes.js' exists.");
+} catch {
+  console.warn("⚠️ chatRoutes missing");
 }
 
 try {
   messageRoutes = require("./routes/messageRoutes");
-} catch (err) {
-  console.warn("⚠️ messageRoutes not found. Make sure './routes/messageRoutes.js' exists.");
+} catch {
+  console.warn("⚠️ messageRoutes missing");
 }
 
 try {
   paymentRoutes = require("./routes/paymentRoutes");
-} catch (err) {
-  console.warn("⚠️ paymentRoutes not found. Make sure './routes/paymentRoutes.js' exists.");
+} catch {
+  console.warn("⚠️ paymentRoutes missing");
 }
 
 // Protected routes
@@ -54,10 +58,7 @@ if (paymentRoutes) app.use("/api/payments", paymentRoutes);
 // MongoDB Connection
 // -----------------------------
 mongoose
-  .connect(process.env.MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
+  .connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => console.error("❌ MongoDB connection error:", err));
 
@@ -65,9 +66,7 @@ mongoose
 // HTTP & Socket.io Server
 // -----------------------------
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: "*" },
-});
+const io = new Server(server, { cors: { origin: "*" } });
 
 // Track online users
 const onlineUsers = new Map();
@@ -75,37 +74,35 @@ const onlineUsers = new Map();
 io.on("connection", (socket) => {
   console.log("⚡ User connected:", socket.id);
 
-  // User comes online
   socket.on("user:online", ({ userId }) => {
     onlineUsers.set(userId, socket.id);
-    io.emit("online:update", Array.from(onlineUsers.keys()));
+    io.emit("online:update", [...onlineUsers.keys()]);
   });
 
-  // Typing event
   socket.on("typing", ({ chatId, from }) => {
     socket.to(chatId).emit("typing", { chatId, from });
   });
 
-  // Chat message
   socket.on("chat:message", async ({ chatId, from, text, attachments }) => {
     try {
       const Message = require("./models/Message");
-      const newMessage = await Message.create({ chat: chatId, from, text, attachments });
+      const newMessage = await Message.create({
+        chat: chatId,
+        from,
+        text,
+        attachments,
+      });
       io.to(chatId).emit("chat:message", newMessage);
     } catch (err) {
-      console.error("Error saving message:", err);
+      console.error("❌ Message error:", err);
     }
   });
 
-  // User disconnects
   socket.on("disconnect", () => {
     for (const [userId, socketId] of onlineUsers.entries()) {
-      if (socketId === socket.id) {
-        onlineUsers.delete(userId);
-        break;
-      }
+      if (socketId === socket.id) onlineUsers.delete(userId);
     }
-    io.emit("online:update", Array.from(onlineUsers.keys()));
+    io.emit("online:update", [...onlineUsers.keys()]);
     console.log("⚡ User disconnected:", socket.id);
   });
 });
@@ -114,5 +111,5 @@ io.on("connection", (socket) => {
 // Start Server
 // -----------------------------
 server.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
