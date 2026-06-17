@@ -1,4 +1,3 @@
-require("dotenv").config();
 const axios = require("axios");
 const Payment = require("../models/Payment");
 const User = require("../models/User");
@@ -18,9 +17,9 @@ exports.createPayment = async (req, res) => {
   const { userId, amount, reference, status } = req.body;
   try {
     const payment = await Payment.create({ userId, amount, reference, status });
-    res.json(payment);
+    res.json({ success: true, message: "Payment record created", data: payment });
   } catch (err) {
-    res.status(500).json({ message: "Error creating payment record", error: err.message });
+    res.status(500).json({ success: false, message: "Error creating payment record" });
   }
 };
 
@@ -63,7 +62,7 @@ exports.verifyAccount = async (req, res) => {
     });
   } catch (err) {
     console.error("Verify Account Error:", err.response?.data || err);
-    res.status(500).json({ error: "Account verification payment failed" });
+    res.status(500).json({ success: false, message: "Account verification payment failed" });
   }
 };
 
@@ -81,10 +80,10 @@ exports.initiatePayment = async (req, res) => {
       { headers }
     );
 
-    res.status(200).json(response.data.data);
+    res.status(200).json({ success: true, message: "Payment initiated", data: response.data.data });
   } catch (err) {
     console.error("Initiate Payment Error:", err.response?.data || err);
-    res.status(500).json({ error: "Payment initialization failed" });
+    res.status(500).json({ success: false, message: "Payment initialization failed" });
   }
 };
 
@@ -95,10 +94,10 @@ exports.verifyPayment = async (req, res) => {
   try {
     const { reference } = req.params;
     const response = await axios.get(`${PAYSTACK_BASE}/transaction/verify/${reference}`, { headers });
-    res.status(200).json(response.data);
+    res.status(200).json({ success: true, message: "Payment verified", data: response.data });
   } catch (err) {
     console.error("Verify Payment Error:", err.response?.data || err);
-    res.status(500).json({ error: "Payment verification failed" });
+    res.status(500).json({ success: false, message: "Payment verification failed" });
   }
 };
 
@@ -113,10 +112,10 @@ exports.createCustomer = async (req, res) => {
       { email, first_name, last_name, phone },
       { headers }
     );
-    res.status(200).json(response.data);
+    res.status(200).json({ success: true, message: "Customer created", data: response.data });
   } catch (err) {
     console.error("Create Customer Error:", err.response?.data || err);
-    res.status(500).json({ error: "Customer creation failed" });
+    res.status(500).json({ success: false, message: "Customer creation failed" });
   }
 };
 
@@ -131,10 +130,10 @@ exports.transferToUser = async (req, res) => {
       { source: "balance", amount: amount * 100, recipient: recipientCode, reason: reason || "SkillAfrik payout" },
       { headers }
     );
-    res.status(200).json({ message: "Transfer initiated", data: response.data });
+    res.status(200).json({ success: true, message: "Transfer initiated", data: response.data });
   } catch (err) {
     console.error("Transfer Error:", err.response?.data || err);
-    res.status(500).json({ error: "Transfer failed" });
+    res.status(500).json({ success: false, message: "Transfer failed" });
   }
 };
 
@@ -149,10 +148,10 @@ exports.refundPayment = async (req, res) => {
       { transaction: reference, ...(amount && { amount: amount * 100 }) },
       { headers }
     );
-    res.status(200).json(response.data);
+    res.status(200).json({ success: true, message: "Refund processed", data: response.data });
   } catch (err) {
     console.error("Refund Error:", err.response?.data || err);
-    res.status(500).json({ error: "Refund failed" });
+    res.status(500).json({ success: false, message: "Refund failed" });
   }
 };
 
@@ -162,7 +161,6 @@ exports.refundPayment = async (req, res) => {
 exports.handleWebhook = async (req, res) => {
   try {
     const event = req.body;
-    console.log("Webhook Event Received:", event);
     // TODO: handle payments, users, jobs updates based on webhook
     res.sendStatus(200);
   } catch (err) {

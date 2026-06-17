@@ -5,6 +5,8 @@ const Payment = require('../models/Payment');
 const User = require('../models/User');
 const Job = require('../models/Job');
 
+const prodLogger = require('../utils/productionLogger');
+
 const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET;
 if (!PAYSTACK_SECRET) console.error('❌ PAYSTACK_SECRET is missing in .env!');
 
@@ -30,7 +32,7 @@ if (!PAYSTACK_SECRET) console.error('❌ PAYSTACK_SECRET is missing in .env!');
 router.post('/payments/test', express.json(), async (req, res) => {
   try {
     const event = req.body;
-    console.log('⚡ Local test webhook received:', event.type || event.event);
+    prodLogger.info('Local test webhook received', event.type || event.event);
 
     const metadata = event.data?.metadata || {};
     const { userId, purpose, jobId, paymentId } = metadata;
@@ -42,7 +44,7 @@ router.post('/payments/test', express.json(), async (req, res) => {
         payment.status = 'PAID';
         payment.paidAt = new Date();
         await payment.save();
-        console.log(`Payment ${payment._id} marked as PAID (local test)`);
+        prodLogger.info(`Payment ${payment._id} marked as PAID (local test)`);
       }
     }
 
@@ -51,14 +53,14 @@ router.post('/payments/test', express.json(), async (req, res) => {
       case 'verification':
         if (userId) {
           await User.findByIdAndUpdate(userId, { verified: true, verificationDate: new Date() });
-          console.log(`User ${userId} verified (local test)`);
+          prodLogger.info(`User ${userId} verified (local test)`);
         }
         break;
 
       case 'top_user':
         if (userId) {
           await User.findByIdAndUpdate(userId, { isTopUser: true, topUserDate: new Date() });
-          console.log(`User ${userId} upgraded to Top User (local test)`);
+          prodLogger.info(`User ${userId} upgraded to Top User (local test)`);
         }
         break;
 
@@ -68,19 +70,19 @@ router.post('/payments/test', express.json(), async (req, res) => {
             hasPaidHiringFee: true,
             hiringFeeExpiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
           });
-          console.log(`Company ${userId} hiring fee marked as PAID (local test)`);
+          prodLogger.info(`Company ${userId} hiring fee marked as PAID (local test)`);
         }
         break;
 
       case 'job_escrow':
         if (jobId) {
           await Job.findByIdAndUpdate(jobId, { escrowPaid: true });
-          console.log(`Job ${jobId} escrow marked PAID (local test)`);
+          prodLogger.info(`Job ${jobId} escrow marked PAID (local test)`);
         }
         break;
 
       default:
-        console.log('No action defined for purpose:', purpose);
+        prodLogger.warn('No action defined for purpose', purpose);
     }
 
     res.status(200).send('ok');
@@ -104,17 +106,17 @@ router.post('/payments', express.raw({ type: '*/*' }), async (req, res) => {
 
     if (req.headers['x-local-test']) {
       event = JSON.parse(req.body.toString());
-      console.log('⚡ Local test webhook received (raw):', event.type || event.event);
+      prodLogger.info('Local test webhook received (raw)', event.type || event.event);
     } else {
       // Verify Paystack signature
       const hash = crypto.createHmac('sha512', PAYSTACK_SECRET).update(req.body).digest('hex');
       if (hash !== req.headers['x-paystack-signature']) {
-        console.log('❌ Invalid signature');
+        prodLogger.warn('Invalid Paystack signature');
         return res.status(400).send('Invalid signature');
       }
 
       event = JSON.parse(req.body.toString());
-      console.log('✅ Paystack webhook event received:', event.event);
+      prodLogger.info('Paystack webhook event received', event.event);
     }
 
     if ((event.event || event.type) === 'charge.success') {
@@ -128,7 +130,7 @@ router.post('/payments', express.raw({ type: '*/*' }), async (req, res) => {
           payment.status = 'PAID';
           payment.paidAt = new Date();
           await payment.save();
-          console.log(`Payment ${payment._id} marked as PAID`);
+          prodLogger.info(`Payment ${payment._id} marked as PAID`);
         }
       }
 
@@ -154,7 +156,7 @@ router.post('/payments', express.raw({ type: '*/*' }), async (req, res) => {
           break;
 
         default:
-          console.log('No action defined for purpose:', purpose);
+          prodLogger.warn('No action defined for purpose', purpose);
       }
     }
 
@@ -200,7 +202,7 @@ router.post('/payments/test-helper', express.json(), async (req, res) => {
     payment.status = 'PAID';
     payment.paidAt = new Date();
     await payment.save();
-    console.log(`✅ Payment ${payment._id} marked as PAID`);
+    prodLogger.info(`Payment ${payment._id} marked as PAID`);
 
     // Handle purposes
     switch (purpose) {
@@ -224,7 +226,7 @@ router.post('/payments/test-helper', express.json(), async (req, res) => {
         break;
 
       default:
-        console.log(`⚠️ Unknown purpose: ${purpose}`);
+        prodLogger.warn(`Unknown purpose: ${purpose}`);
     }
 
     res.json({

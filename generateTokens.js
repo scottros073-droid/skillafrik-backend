@@ -5,7 +5,12 @@ const clientId = "6924246ae2b026efb60dfcbe"; // client _id
 const workerId = "692425a2e2b026efb60dfcc1"; // worker _id
 
 // Secret from .env (make sure it matches your backend JWT_SECRET)
-const secret = process.env.JWT_SECRET || "adewale_secure_token_123";
+const secret = process.env.JWT_SECRET;
+
+if (!secret) {
+  console.error('JWT_SECRET not found in environment variables');
+  process.exit(1);
+}
 
 // Function to generate token
 const generateToken = (id) => {

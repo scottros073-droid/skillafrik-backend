@@ -1,8 +1,8 @@
-require("dotenv").config();
+require("./config/loadEnv");
 const axios = require("axios");
 const jwt = require("jsonwebtoken");
 
-const BASE_URL = "http://localhost:5000/api"; // adjust if needed
+const BASE_URL = process.env.API_BASE_URL || "https://afrikskill-hash.onrender.com/api";
 const JOB_ID = "69244632d01eae527eb89fb1";    // your job _id
 const CLIENT_ID = "YOUR_CLIENT_ID_HERE";      // replace with actual client _id
 const WORKER_ID = "692425a2e2b026efb60dfcc1"; // your worker _id

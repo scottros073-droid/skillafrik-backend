@@ -20,7 +20,19 @@ const paymentSchema = new mongoose.Schema(
     email: { type: String }, // Optional but useful for Paystack
     purpose: {
       type: String,
-      enum: ["job_escrow", "verification", "top_user", "company_hiring", "upgrade"],
+      enum: [
+        "job_escrow",
+        "verification",
+        "verify",
+        "top_user",
+        "company_hiring",
+        "upgrade",
+        "boost",
+        "feature",
+        "subscription",
+        "deposit",
+        "general"
+      ],
       required: true,
     },
 
@@ -34,10 +46,24 @@ const paymentSchema = new mongoose.Schema(
       default: "PENDING",
     },
 
+    // Subscription-related
+    subscriptionType: { type: String, enum: ["monthly", "yearly"], default: null },
+    subscriptionActivated: { type: Boolean, default: false },
+
     // When payment was completed
     paidAt: { type: Date },
+    verifiedAt: { type: Date },
+    gatewayResponse: { type: Object, default: null },
+    authorizationUrl: { type: String, default: null },
+    accessCode: { type: String, default: null },
   },
   { timestamps: true } // automatically creates createdAt and updatedAt
 );
+
+// Indexes for performance
+paymentSchema.index({ userId: 1, createdAt: -1 });
+paymentSchema.index({ status: 1 });
+paymentSchema.index({ createdAt: -1 });
+paymentSchema.index({ purpose: 1, 'metadata.escrowId': 1, status: 1 });
 
 module.exports = mongoose.model("Payment", paymentSchema);

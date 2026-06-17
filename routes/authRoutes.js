@@ -1,68 +1,33 @@
-// backend/routes/authRoutes.js
-const express = require("express");
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
-const User = require("../models/User");
+// filepath: backend/routes/authRoutes.js
+const express = require('express');
+const authController = require('../controllers/authController');
+const userController = require('../controllers/userController');
+const { authMiddleware, adminMiddleware } = require('../middleware/authMiddleware');
+const { authLimiter, signupLimiter, forgotPasswordLimiter, requireTrustedOrigin } = require('../middleware/security');
+const { validate, loginSchema, signupSchema } = require('../middleware/validation');
 
 const router = express.Router();
 
-// SIGN UP
-router.post("/signup", async (req, res) => {
-  try {
-    const { name, email, password, role } = req.body;
+// Public routes with rate limiting
+const signupHandlers = [signupLimiter, validate(signupSchema), authController.signup];
+router.post('/register', ...signupHandlers);
+router.post('/signup', ...signupHandlers);
+router.post('/login', authLimiter, validate(loginSchema), authController.login);
+router.post('/google', authLimiter, authController.authGoogle);
+router.post('/refresh', requireTrustedOrigin, authController.refreshToken);
+// Lightweight probe to check whether refresh cookie exists without causing auth failures
+router.get('/refresh-probe', authController.refreshProbe);
+router.post('/forgot-password', forgotPasswordLimiter, authController.forgotPassword);
+router.post('/reset-password/:token', authController.resetPassword);
 
-    if (!name || !email || !password) {
-      return res.status(400).json({ message: "All fields required" });
-    }
+// Protected routes
+router.get('/me', authMiddleware, authController.getCurrentUser);
+router.get('/profile', authMiddleware, userController.getUserProfile);
+router.put('/profile', authMiddleware, userController.updateProfile);
+router.delete('/delete-account', authMiddleware, userController.deleteAccount);
+router.post('/logout', authController.logout);
 
-    const exists = await User.findOne({ email });
-    if (exists) {
-      return res.status(400).json({ message: "Email already exists" });
-    }
-
-    const hashed = await bcrypt.hash(password, 10);
-
-    const user = await User.create({
-      name,
-      email,
-      password: hashed,
-      role: role || "worker",
-    });
-
-    const token = jwt.sign(
-      { id: user._id },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
-    );
-
-    res.status(201).json({ token, user });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Signup failed" });
-  }
-});
-
-// LOGIN
-router.post("/login", async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    const user = await User.findOne({ email });
-    if (!user) return res.status(400).json({ message: "Invalid login" });
-
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) return res.status(400).json({ message: "Invalid login" });
-
-    const token = jwt.sign(
-      { id: user._id },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
-    );
-
-    res.json({ token, user });
-  } catch (err) {
-    res.status(500).json({ message: "Login failed" });
-  }
-});
+// Admin routes
+router.get('/users', authMiddleware, adminMiddleware, authController.getAllUsers);
 
 module.exports = router;

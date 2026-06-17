@@ -1,31 +1,46 @@
 // approveJobDirectFull.js
-require("dotenv").config();
+require("./config/loadEnv");
 const mongoose = require("mongoose");
 const Job = require("./models/Job");
 const Payment = require("./models/Payment");
 
-const jobId = "69245eee67372d9b591844b0"; // your job _id
-const clientId = "6924246ae2b026efb60dfcbe"; // client to assign
+const jobId = "69245eee67372d9b591844b0";
+const clientId = "6924246ae2b026efb60dfcbe";
 
-mongoose.connect(process.env.MONGO_URI)
+if (!process.env.MONGO_URI) {
+  console.error("❌ MONGO_URI not defined in .env");
+  process.exit(1);
+}
+
+Promise.race([
+  mongoose.connect(process.env.MONGO_URI, {
+    serverSelectionTimeoutMS: 10000,
+    socketTimeoutMS: 10000
+  }),
+  new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('Connection timeout')), 10000)
+  )
+])
   .then(async () => {
+    console.log("✅ MongoDB connected");
     const job = await Job.findById(jobId);
-    if (!job) return console.log("❌ Job not found");
+    if (!job) {
+      console.log("❌ Job not found");
+      await mongoose.connection.close();
+      process.exit(1);
+    }
 
-    // Assign client
     if (!job.clientId) {
       job.clientId = clientId;
       console.log("✅ Client assigned to job");
     }
 
-    // Simulate delivery if not done
     if (job.status !== "DELIVERED") {
       job.status = "DELIVERED";
       job.delivery = { files: ["file1.pdf"], message: "Work completed. Please check.", deliveredAt: new Date() };
       console.log("✅ Job delivery simulated");
     }
 
-    // Simulate escrow payment if not paid
     if (!job.escrowPaid) {
       job.escrowPaid = true;
       job.escrow = { status: "HELD" };

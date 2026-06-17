@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: skillafrik-backend
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: FRONTEND_URL
+        value: https://afrikskill-hash.vercel.app
+      - key: CLIENT_URL
+        value: https://afrikskill-hash.vercel.app
+      - key: PRODUCTION_FRONTEND_URL
+        value: https://afrikskill-hash.vercel.app
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+      - key: SESSION_COOKIE_HTTP_ONLY
+        value: "true"
+      - key: SESSION_COOKIE_SAME_SITE
+        value: none
+      # Set these in the Render dashboard:
+      # MONGO_URI, JWT_SECRET, JWT_REFRESH_SECRET, PAYSTACK_SECRET_KEY,
+      # PAYSTACK_PUBLIC_KEY, PAYSTACK_WEBHOOK_SECRET, OPENAI_API_KEY,
+      # GOOGLE_CLIENT_ID, ADMIN_EMAIL, ADMIN_PASSWORD, SMTP_HOST, SMTP_PORT,
+      # SMTP_USER, SMTP_PASSWORD, SENDER_EMAIL, AWS_ACCESS_KEY_ID,
+      # AWS_SECRET_ACCESS_KEY, AWS_S3_BUCKET, AWS_S3_REGION
+
+databases:
+  - name: skillafrik_db
+    databaseName: skillafrik
+    user: skillafrik_user

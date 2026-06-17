@@ -1,58 +1,58 @@
+// backend/routes/userRoutes.js
+
 const express = require('express');
-const router = express.Router();
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const multer = require('multer');
+const userController = require('../controllers/userController');
+const { authMiddleware } = require('../middleware/authMiddleware');
 
-// 🧩 User Signup
-router.post('/signup', async (req, res) => {
-  try {
-    const { name, email, password } = req.body;
-
-    // Check if user already exists
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ message: 'User already exists' });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+  fileFilter: (req, file, cb) => {
+    if (!/^image\/(png|jpe?g|webp|gif)$/i.test(file.mimetype || '')) {
+      return cb(new Error('Avatar must be an image file'), false);
     }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Create new user
-    const newUser = new User({ name, email, password: hashedPassword });
-    await newUser.save();
-
-    res.json({ message: 'Signup successful' });
-  } catch (error) {
-    console.error('Signup Error:', error);
-    res.status(500).json({ message: 'Server error' });
+    return cb(null, true);
   }
 });
 
-// 🔐 User Login
-router.post('/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
+const avatarUpload = (req, res, next) => {
+  upload.single('avatar')(req, res, (error) => {
+    if (error) return res.status(400).json({ success: false, message: error.message });
+    return next();
+  });
+};
 
-    // Find user
-    const user = await User.findOne({ email });
-    if (!user) return res.status(400).json({ message: 'User not found' });
+const userRouter = express.Router();
+userRouter.get('/profile', authMiddleware, userController.getUserProfile);
+userRouter.put('/profile', authMiddleware, avatarUpload, userController.updateProfile);
+userRouter.put('/bank-details', authMiddleware, userController.updateBankDetails);
+userRouter.delete('/account', authMiddleware, userController.deleteAccount);
 
-    // Compare password
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
+const profileRouter = express.Router();
+profileRouter.get('/', authMiddleware, userController.getUserProfile);
+profileRouter.put('/', authMiddleware, avatarUpload, userController.updateProfile);
+profileRouter.delete('/', authMiddleware, userController.deleteAccount);
 
-    // Generate token
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
+const freelancerRouter = express.Router();
+freelancerRouter.get('/', userController.getFreelancers);
+freelancerRouter.get('/freelancers', userController.getFreelancers);
+freelancerRouter.get('/skills', userController.getSkills);
+freelancerRouter.get('/freelancers/:id', userController.getFreelancer);
+freelancerRouter.get('/freelancer/:id', userController.getFreelancer);
+freelancerRouter.get('/:id', userController.getFreelancer);
 
-    res.json({ message: 'Login successful', token });
-  } catch (error) {
-    console.error('Login Error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
+const publicProfileRouter = express.Router();
+publicProfileRouter.get('/:userId', userController.getPublicProfile);
 
-module.exports = router;
-router.get('/test', (req, res) => {
-  res.json({ message: '✅ Frontend connected to backend successfully!' });
-});
+const usersRouter = express.Router();
+usersRouter.get('/freelancers', userController.getFreelancers);
+usersRouter.get('/:id', userController.getPublicProfile);
+
+module.exports = {
+  userRouter,
+  profileRouter,
+  freelancerRouter,
+  publicProfileRouter,
+  usersRouter
+};

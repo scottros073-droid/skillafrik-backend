@@ -1,4 +1,4 @@
-require('dotenv').config(); // ADD THIS AT THE TOP
+require('./config/loadEnv');
 const crypto = require('crypto');
 
 const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET;

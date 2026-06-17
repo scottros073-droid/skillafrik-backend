@@ -1,42 +1,28 @@
 // backend/routes/chatRoutes.js
 const express = require('express');
 const router = express.Router();
-const Chat = require('../models/Chat');
-const Message = require('../models/Message');
+const { authMiddleware } = require("../middleware/authMiddleware");
+const {
+  createChat,
+  getChat,
+  getChats
+} = require("../controllers/chatController");
 
-// list chats for current user (requires auth middleware ideally)
-router.get('/', async (req, res) => {
-  try {
-    const userId = req.user?.id || req.query.userId; // adapt to your auth middleware
-    if (!userId) return res.status(400).json({ message: 'userId required' });
-
-    const chats = await Chat.find({ participants: userId })
-      .sort({ updatedAt: -1 })
-      .populate('participants', 'name email') // choose fields
-      .lean();
-
-    // attach last message
-    const enriched = await Promise.all(chats.map(async (c) => {
-      const last = await Message.findOne({ chat: c._id }).sort({ createdAt: -1 }).lean();
-      return { ...c, lastMessage: last || null };
-    }));
-
-    res.json(enriched);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Failed to list chats' });
+// Create a new chat
+router.post("/", authMiddleware, createChat);
+router.post("/conversations", authMiddleware, (req, res, next) => {
+  if (req.body?.participantId && !req.body.participants) {
+    req.body.participants = [req.body.participantId];
   }
+  return createChat(req, res, next);
 });
 
-// get single chat messages
-router.get('/:chatId/messages', async (req, res) => {
-  try {
-    const { chatId } = req.params;
-    const messages = await Message.find({ chat: chatId }).sort({ createdAt: 1 }).lean();
-    res.json(messages);
-  } catch (err) {
-    res.status(500).json({ message: 'Failed' });
-  }
-});
+// Get user's chats
+router.get("/", authMiddleware, getChats);
+router.get("/conversations", authMiddleware, getChats);
+
+// Get chat by ID
+router.get("/:chatId", authMiddleware, getChat);
+router.get("/conversations/:chatId", authMiddleware, getChat);
 
 module.exports = router;

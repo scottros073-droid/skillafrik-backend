@@ -1,205 +1,94 @@
-// backend/routes/paymentRoutes.js
-const express = require("express");
+// filepath: backend/routes/paymentRoutes.js
+const express = require('express');
 const router = express.Router();
-const auth = require("../middleware/auth");
+const { authMiddleware } = require('../middleware/authMiddleware');
+const { validate, paymentSchema } = require('../middleware/validation');
+const paymentController = require('../controllers/paymentController');
+const Transaction = require('../models/Transaction');
+const Payment = require('../models/Payment');
 
-// Models
-const User = require("../models/User");
-const Payment = require("../models/Payment");
-const Job = require("../models/Job");
+// USD conversion rate
+const USD_RATE = 1;
 
-// Paystack controllers
-const {
-  initializePayment,
-  verifyPayment,
-  createCustomer,
-  transferToUser,
-  refundPayment,
-  handleWebhook,
-  verifyAccount,
-} = require("../controllers/paystackController");
+// Convert amount to USD format
+const toUSD = (amount) => `$${(amount * USD_RATE).toFixed(2)}`;
 
-// -----------------------------------
-// LOG EVERY REQUEST
-// -----------------------------------
-router.use((req, res, next) => {
-  console.log(`⚡ ${req.method} ${req.originalUrl}`);
-  next();
-});
-
-/*----------------------------------------------------------
-| 1. ACCOUNT VERIFICATION
-----------------------------------------------------------*/
-router.post("/verify-account", auth, verifyAccount);
-
-/*----------------------------------------------------------
-| 2. UPGRADE TOP USER ($5)
-----------------------------------------------------------*/
-router.post("/upgrade-top-user", auth, async (req, res) => {
-  try {
-    const user = req.user;
-
-    const payment = await Payment.create({
-      userId: user._id,
-      amount: 500,
-      currency: "NGN",
-      purpose: "top_user",
-      status: "PENDING",
-    });
-
-    const checkout = await initializePayment({
-      email: user.email,
-      amount: 500,
-      callback_url: `${process.env.BASE_URL}/api/payments/webhook`,
-      metadata: { paymentId: payment._id, purpose: "top_user", userId: user._id },
-    });
-
-    payment.gatewayRef = checkout.reference;
-    await payment.save();
-
-    res.json({
-      message: "Top user upgrade initiated",
-      checkoutUrl: checkout.authorization_url,
-      paymentId: payment._id,
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
-/*----------------------------------------------------------
-| 3. COMPANY HIRING FEE ($3)
-----------------------------------------------------------*/
-router.post("/company-hiring", auth, async (req, res) => {
-  try {
-    const user = req.user;
-
-    const payment = await Payment.create({
-      userId: user._id,
-      amount: 300,
-      currency: "NGN",
-      purpose: "company_hiring",
-      status: "PENDING",
-    });
-
-    const checkout = await initializePayment({
-      email: user.email,
-      amount: 300,
-      callback_url: `${process.env.BASE_URL}/api/payments/webhook`,
-      metadata: { paymentId: payment._id, purpose: "company_hiring", userId: user._id },
-    });
-
-    payment.gatewayRef = checkout.reference;
-    await payment.save();
-
-    res.json({
-      checkoutUrl: checkout.authorization_url,
-      paymentId: payment._id,
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
-/*----------------------------------------------------------
-| 4. ESCROW PAYMENT FOR JOB
-----------------------------------------------------------*/
-router.post("/create", auth, async (req, res) => {
-  try {
-    const { jobId, userId } = req.body;
-
-    if (!jobId || !userId) {
-      return res.status(400).json({ message: "jobId and userId required" });
-    }
-
-    const job = await Job.findById(jobId);
-    if (!job) return res.status(404).json({ message: "Job not found" });
-
-    const payment = await Payment.create({
-      jobId,
-      userId,
-      amount: job.amount,
-      currency: job.currency || "NGN",
-      purpose: "job_escrow",
-      status: "PENDING",
-      gateway: "paystack",
-      gatewayRef: `PSK_${Date.now()}`,
-    });
-
-    res.json({
-      message: "Payment created for hiring worker",
-      paymentId: payment._id,
-      gatewayRef: payment.gatewayRef,
-      amount: payment.amount,
-      currency: payment.currency,
-    });
-  } catch (err) {
-    res.status(500).json({ message: "Server error", error: err.message });
-  }
-});
-
-/*----------------------------------------------------------
-| 5. GENERIC PAYSTACK ROUTES
-----------------------------------------------------------*/
 // Initialize payment
-router.post("/init", auth, async (req, res) => {
+router.post('/initialize', authMiddleware, paymentController.initiatePayment);
+
+// Verify payment by reference
+router.get('/verify/:reference', authMiddleware, paymentController.verifyPayment);
+
+// Get payment history
+router.get('/history', authMiddleware, paymentController.getPaymentHistory);
+
+// Get earnings (main endpoint for frontend)
+router.get('/earnings', authMiddleware, async (req, res) => {
   try {
-    const { email, amount, metadata, callback_url } = req.body;
-    const checkout = await initializePayment({ email, amount, metadata, callback_url });
-    res.json(checkout);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  }
-});
+    const userId = req.user._id;
 
-// Verify payment
-router.get("/verify/:reference", auth, verifyPayment);
+    // Get all transactions for earnings calculation
+    const transactions = await Transaction.find({ 
+      userId,
+      type: { $in: ['RELEASE', 'credit', 'earning'] }
+    }).sort({ createdAt: -1 });
 
-// Customer creation
-router.post("/customer", auth, createCustomer);
+    // Calculate total earnings
+    const totalEarnings = transactions
+      .filter(t => t.type === 'RELEASE' || t.type === 'credit' || t.type === 'earning')
+      .reduce((sum, t) => sum + (t.amount || 0), 0);
 
-// Transfer to user
-router.post("/transfer", auth, transferToUser);
+    // Get pending payments
+    const pendingPayments = await Payment.find({
+      userId,
+      status: 'PENDING'
+    });
 
-// Refund payment
-router.post("/refund", auth, refundPayment);
+    const pendingAmount = pendingPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
 
-// Webhook handler
-router.post("/webhook", handleWebhook);
+    // Get completed payments
+    const completedPayments = await Payment.find({
+      userId,
+      status: 'PAID'
+    });
 
-/*----------------------------------------------------------
-| 6. LOCAL DEV TEST WEBHOOK
-----------------------------------------------------------*/
-router.post("/test", async (req, res) => {
-  try {
-    const { paymentId, purpose } = req.body;
-
-    const payment = await Payment.findById(paymentId);
-    if (!payment) return res.status(404).json({ message: "Payment not found" });
-
-    payment.status = "PAID";
-    await payment.save();
-
-    if (purpose === "job_escrow") {
-      const job = await Job.findById(payment.jobId);
-      if (job) {
-        job.escrow = { status: "HELD" };
-        job.escrowPaid = true;
-        await job.save();
-      }
-    }
+    const completedAmount = completedPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
 
     res.json({
-      message: "Test payment processed",
-      paymentId,
-      purpose,
+      success: true,
+      data: {
+        totalEarnings: toUSD(totalEarnings),
+        pendingAmount: toUSD(pendingAmount),
+        completedAmount: toUSD(completedAmount),
+        recentTransactions: transactions.slice(0, 10).map(t => ({
+          id: t._id,
+          type: t.type,
+          amount: toUSD(t.amount),
+          description: t.description || t.type,
+          status: t.status || 'completed',
+          date: t.createdAt
+        }))
+      }
     });
-  } catch (err) {
-    res.status(500).json({ message: "Server error", error: err.message });
+  } catch (error) {
+    console.error('Get earnings error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
   }
 });
+
+// Top user payment
+router.post('/top-user', authMiddleware, paymentController.initiateTopUser);
+
+// Account verification payment
+router.post('/verify-account', authMiddleware, paymentController.initiateVerification);
+
+// Webhook (no auth required - must use express.raw for signature verification)
+router.post('/webhook', express.raw({ type: 'application/json' }), paymentController.handleWebhook);
+
+// Legacy route for backward compatibility
+router.post('/init', authMiddleware, paymentController.initiatePayment);
 
 module.exports = router;
