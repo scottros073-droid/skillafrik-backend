@@ -1303,6 +1303,7 @@ exports.logout = async (req, res) => {
 
 exports.refreshToken = async (req, res) => {
   try {
+    logger.info('Refresh token endpoint invoked', { path: req.path, ip: req.ip, cookieHeaderExists: Boolean(req.headers?.cookie) });
     // ===== STEP 1: VALIDATE COOKIE EXISTENCE =====
     const payload = req.body || {};
     const refreshToken = payload.refreshToken || getCookie(req, REFRESH_TOKEN_COOKIE);
@@ -1330,6 +1331,7 @@ exports.refreshToken = async (req, res) => {
     }
 
     if (!decoded || decoded.type !== 'refresh' || !decoded.id) {
+      logger.warn('Refresh token payload invalid or missing required fields', { decoded: decoded || null, tokenSnippet: refreshToken ? String(refreshToken).slice(0, 20) : null, ip: req.ip });
       clearRefreshCookie(res);
       return safeJsonResponse(res, 401, false, 'Invalid authentication session');
     }

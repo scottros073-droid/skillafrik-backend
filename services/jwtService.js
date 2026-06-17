@@ -35,7 +35,8 @@ const verifyAccessToken = (token) => {
   try {
     return jwt.verify(token, process.env.JWT_SECRET);
   } catch (error) {
-    return null;
+    // Bubble up to callers so they can log reasons explicitly
+    throw error;
   }
 };
 
@@ -44,7 +45,8 @@ const verifyRefreshToken = (token) => {
   try {
     return jwt.verify(token, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET);
   } catch (error) {
-    return null;
+    // Bubble up so refresh endpoint logs the exact JWT error
+    throw error;
   }
 };
 
